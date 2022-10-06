@@ -10,10 +10,10 @@ void check_msb(int num){
     printf("%d\n", num & 1);
 }
 
-void print_bits(unsigned int n){
+void print_bits(unsigned char n){
     unsigned ns;
-    for(int i = 1; i < 33; i++){
-        ns = n>>(32-i);
+    for(int i = 1; i < 9; i++){
+        ns = n>>(8-i);
         printf("%u", ns);
         n = n<<i;
         n = n>>i;
