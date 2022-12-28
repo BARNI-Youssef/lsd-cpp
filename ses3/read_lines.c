@@ -1,73 +1,70 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <unistd.h>    
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <fcntl.h>
+#include "read_lines.h"
 
-
-char* conct(char* dest, char* src, int n){
-	int size_dest;
-	int size_src;
-	for(size_dest = 0; dest[size_dest] != '\0'; ++size_dest);
-	for(size_src = 0; src[size_src] != '\0'; ++size_src);
-	if(n > size_src) n = size_src;
-	int size = size_dest + n;
-	char* final = malloc(size);
-	for(int i = 0; i < size_dest; i++) final[i] = dest[i];
-	for(int i = size_dest; i < size; i++) final[i] = src[i-size_dest];
-	free(dest);
-	return final;
+void add_element(list* L, char element){
+    cell* C = malloc(sizeof(cell));                             // allocate the memory for the new cell.
+    C->following = NULL;                                        // make this cell the end of the list.
+    C->X = element;                                             // put the new element in the cell.
+    if(*L == NULL) *L = C;                                      // if the list is empty, make the ne cell the first element.
+    else{
+        list temp = *L;
+        while (temp->following != NULL) temp = temp->following; // go to the end of the list.
+        temp->following = C;                                    // add the new cell at the end of the list.
+    }
 }
 
-char* trim(char* buffer, int n){
-	int size;
-	for(size = 0; buffer[size] != '\0'; ++size);
-	char* final = malloc(size - n);
-	for(int i = 0; i < size - n; i++){
-		final[i] = buffer[n+i];
-	}
-	free(buffer);
-	return final;
+list next_delim(list L){
+    list temp = L;
+    while (temp != NULL) {
+        if (temp->X == '\n' || temp->X == '\0') return temp;    // if the cell containt a EOL or EOF character, return it.
+        temp = temp->following;
+    }
+    return temp;                                                // return a NULL pointer if there isn't a end character.
 }
 
-static char* off_set;
-static int count;
+void write_in_list(char* buffer, list* L, int n){
+    for (size_t i = 0; i < n; i++) add_element(L, buffer[i]);   // filling the list with the characters of the string.
+}
 
 char* read_lines(int fd){
-	char* nt = malloc(BUFFER_SIZE);
-	if(off_set != NULL) for(count = 0; off_set[count] != '\0'; ++count);
-	char* final = malloc(1);
-	int f = 0;
-	int k = read(fd, nt, BUFFER_SIZE);
-	if(k + count == 0) return NULL;
-	if(count != 0 ) nt = conct(off_set, nt, BUFFER_SIZE);
-	while(f != 1){
-		if(k + count == 0) return NULL;
-		for(int i = 0; i < k + count; i++){
-			if(nt[i] == '\n'){
-				final = conct(final, nt, i+1);
-				if(i < k + count -1){ 
-					off_set = malloc(k + count-1-i);
-					for(int j = 0; j < k + count -i; j++) off_set[j] = nt[i+j+1];
-					count = k+count-i-1;
-				}
-				else {
-					off_set = NULL; 
-					count = 0;
-				}
-				f = 1;
-				break;
-			}
-		}	
-		if(f == 0){
-			final = conct(final, nt, k + count);
-			count = 0;
-			off_set = NULL;
-			k = read(fd, nt, BUFFER_SIZE);
-		}
-	}
-	free(nt);
-	return final;
+    static list L = NULL;                                       // static variable to stock all the read characters.
+    int size;                                                   // variable to stock the length to the string read at each time.
+    char* buf = malloc(BUFFER_SIZE);                            // string to stock the read characters.
+    if (!buf) fprintf(stderr, "Memory allocation failed!\n");   // malloc check.
+    size = read(fd, buf, BUFFER_SIZE);                          // getting the number of characters written in buf.
+    if (size == 0 && L == NULL) return NULL;                    // checking if there's smth left to read, if not, return NULL.
+    write_in_list(buf, &L, size);                               // add all the read characters in the list.
+    list a = next_delim(L);                                     // check if the list contain a full line.
+    while (a == NULL) {                                         // continue reading as long as the list does not have a full line.
+        size = read(fd, buf, BUFFER_SIZE);                      // .
+        write_in_list(buf, &L, size);                           // .
+        a = next_delim(L);                                      // .
+    }                                                           // .
+    int final_size = 0;                                         // variable to stock the length of the line.
+    list temp = L;
+    while (temp != a->following) {                              // counting the length of the line.
+        temp = temp->following;
+        final_size++;
+    }
+    char *final = malloc(final_size * sizeof(char) + 1);        // allocating the space for the line.
+    if (!final) fprintf(stderr, "Memory allocation failed!\n"); // malloc check.
+    for (size_t i = 0; i < final_size; i++) {                   // filling the final string.
+        final[i] = L->X;
+        temp = L;
+        L = L->following;
+        free(temp);                                             // freeing the used memory.
+    }
+    final[final_size] = '\0';                                   // puting a EOF character at the end of the string.
+    free(buf);                                                  // freeing the buffer used for reading.
+    return final;                                               // returning the line read.
 }
 
+int main (){
+    int fd = open("read_lines.c", O_RDONLY);
+    char* buffer = read_lines(fd);
+    while (buffer != NULL) {
+        printf("%s", buffer);
+        free(buffer);
+        buffer = read_lines(fd);
+    }
+    return 0;
+}
